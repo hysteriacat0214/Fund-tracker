@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>单笔基金年化追踪</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f7; color: #1d1d1f; padding: 20px; max-width: 1120px; margin: 0 auto; }
+  h1 { font-size: 20px; margin-bottom: 16px; font-weight: 600; }
+  .card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .card-title { font-size: 14px; font-weight: 600; margin-bottom: 12px; color: #6e6e73; }
+  label { display: block; font-size: 13px; color: #6e6e73; margin-bottom: 4px; margin-top: 8px; }
+  input { width: 100%; padding: 9px 12px; border: 1px solid #d2d2d7; border-radius: 8px; font-size: 15px; outline: none; }
+  input:focus { border-color: #0071e3; }
+  button { padding: 9px 16px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; }
+  .btn-primary { background: #0071e3; color: #fff; margin-top: 10px; width: 100%; }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-secondary { background: #e8e8ed; color: #1d1d1f; font-size: 12px; padding: 6px 10px; }
+  .btn-danger { background: transparent; color: #ff3b30; font-size: 12px; padding: 4px 8px; }
+  .btn-filter { background: #e8e8ed; color: #1d1d1f; font-size: 13px; padding: 8px 14px; }
+  .btn-filter.active { background: #0071e3; color: #fff; }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row input { flex: 1; }
+  .row button { width: auto; margin-top: 0; white-space: nowrap; }
+
+  .toolbar { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .toolbar-actions { justify-content: space-between; }
+
+  #fundsContainer {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+  }
+  @media (max-width: 1000px) {
+    #fundsContainer { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 640px) {
+    #fundsContainer { grid-template-columns: 1fr; }
+  }
+
+  .fund-card { display: flex; flex-direction: column; min-width: 0; }
+  .fund-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .fund-code { font-size: 16px; font-weight: 600; }
+  .fund-name { font-size: 12px; color: #6e6e73; margin-left: 4px; }
+  .fund-actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .nav-info { font-size: 12px; color: #86868b; margin-top: 4px; }
+
+  .budget-row { margin-top: 10px; }
+  .budget-row label { margin-top: 0; }
+  .budget-summary { font-size: 13px; color: #6e6e73; margin-top: 8px; padding: 8px 10px; background: #f5f5f7; border-radius: 8px; }
+  .budget-summary b { color: #1d1d1f; }
+  .negative-text { color: #ff3b30 !important; }
+
+  .buy-form { margin-top: 10px; padding-top: 10px; border-top: 1px solid #f0f0f2; }
+
+  .buy-list {
+    list-style: none;
+    margin-top: 10px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding-right: 4px;
+    border-top: 1px solid #f0f0f2;
+  }
+  .buy-list::-webkit-scrollbar { width: 6px; }
+  .buy-list::-webkit-scrollbar-thumb { background: #d2d2d7; border-radius: 3px; }
+
+  .buy-item { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-bottom: 1px solid #f0f0f2; font-size: 13px; }
+  .buy-item:last-child { border-bottom: none; }
+  .buy-item-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .date-amount { font-weight: 500; }
+  .meta { font-size: 12px; color: #86868b; }
+  .buy-item-actions { display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+  .rate-wrap { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .rate { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .rate.positive { color: #34c759; }
+  .rate.negative { color: #ff3b30; }
+  .sell-tag {
+    background: #fff7e6;
+    color: #d46b08;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid #ffd591;
+    white-space: nowrap;
+  }
+
+  .empty { text-align: center; color: #86868b; font-size: 13px; padding: 24px 0; }
+  .status { font-size: 12px; color: #86868b; min-height: 18px; }
+  #filterEmptyHint { padding: 40px 0; }
+</style>
+</head>
+<body>
+
+<h1>单笔基金年化追踪</h1>
+
+<div class="card toolbar">
+  <div class="row">
+    <input id="newFundCode" type="text" placeholder="输入6位基金代码，例如 012323" maxlength="6" inputmode="numeric">
+    <button class="btn-primary" id="addFundBtn">添加基金</button>
+  </div>
+  <div class="row toolbar-actions">
+    <button class="btn-filter" id="toggleFilterBtn">只看可卖出（≥6%）</button>
+    <span class="status" id="globalStatus"></span>
+  </div>
+</div>
+
+<div id="fundsContainer"></div>
+<div id="filterEmptyHint" class="empty" style="display:none;">当前没有年化收益率 ≥ 6% 的可卖出买点</div>
+
+<script src="https://cdn.jsdelivr.net/npm/fund-api/dist/browser/fund-api.iife.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  const STORAGE_KEY_FUNDS = 'fund_tracker_funds_v2';
+  const SELL_THRESHOLD = 0.06; // 年化收益率 ≥ 6% 标记可卖出
+
+  let funds = [];           // [{ code, name, totalAmount, records, navHistory, latestNav, latestNavDate }]
+  let isFiltered = false;   // 是否只看可卖出
+
+  const newFundCodeInput = document.getElementById('newFundCode');
+  const addFundBtn = document.getElementById('addFundBtn');
+  const globalStatus = document.getElementById('globalStatus');
+  const fundsContainer = document.getElementById('fundsContainer');
+  const toggleFilterBtn = document.getElementById('toggleFilterBtn');
+  const filterEmptyHint = document.getElementById('filterEmptyHint');
+
+  // ---------- 工具 ----------
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  // 本地时区格式化，避免 toISOString 的 UTC 偏移
+  function formatDateLocal(d) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function normalizeDate(d) {
+    const s = String(d);
+    const m = s.match(/(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+    if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+    return s.slice(0, 10);
+  }
+
+  function setGlobalStatus(msg, isError) {
+    globalStatus.textContent = msg || '';
+    globalStatus.style.color = isError ? '#ff3b30' : '#86868b';
+  }
+
+  // ---------- 存储 ----------
+  function loadFundsFromStorage() {
+    try {
+      const arr = JSON.parse(localStorage.getItem(STORAGE_KEY_FUNDS)) || [];
+      return arr.map(f => ({
+        code: f.code,
+        name: f.name || '',
+        totalAmount: Number(f.totalAmount) || 0,
+        records: Array.isArray(f.records) ? f.records : [],
+        navHistory: [],
+        latestNav: null,
+        latestNavDate: '',
+      }));
+    } catch { return []; }
+  }
+
+  function saveFunds() {
+    const arr = funds.map(f => ({
+      code: f.code,
+      name: f.name,
+      totalAmount: f.totalAmount || 0,
+      records: f.records,
+    }));
+    localStorage.setItem(STORAGE_KEY_FUNDS, JSON.stringify(arr));
+  }
+
+  // ---------- 净值计算 ----------
+  function buildNavMap(history) {
+    const map = {};
+    (history || []).forEach(item => {
+      const d = item.date || item.navDate || item.jzrq;
+      const n = item.nav || item.dwjz || item.unitNav;
+      if (d && n != null) map[normalizeDate(d)] = Number(n);
+    });
+    return map;
+  }
+
+  // 找到 <= 目标日期的最近一个有净值的交易日（当天优先）
+  function findNavOnOrBefore(navMap, targetDateStr) {
+    const target = new Date(targetDateStr + 'T00:00:00');
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(target);
+      d.setDate(d.getDate() - i);
+      const key = formatDateLocal(d);
+      if (navMap[key] != null) return navMap[key];
+    }
+    return null;
+  }
+
+  function calcAnnualizedRate(fund, record, navMap) {
+    const buyNav = findNavOnOrBefore(navMap, record.buyDate);
+    if (buyNav == null || buyNav === 0) return null;
+    if (fund.latestNav == null) return null;
+
+    const buyDate = new Date(record.buyDate + 'T00:00:00');
+    const now = new Date();
+    const days = Math.max(1, Math.floor((now - buyDate) / (1000 * 60 * 60 * 24)));
+    const months = Math.max(1, days / 30.44);
+    const rawReturn = (fund.latestNav - buyNav) / buyNav;
+    const annualized = (12 / months) * rawReturn;
+
+    return {
+      annualized,
+      days,
+      buyNav,
+      shares: record.amount / buyNav,
+    };
+  }
+
+  // ---------- 卡片创建 ----------
+  function createFundCard(fund) {
+    const card = document.createElement('div');
+    card.className = 'card fund-card';
+    card.dataset.code = fund.code;
+    card.innerHTML = `
+      <div class="fund-header">
+        <div>
+          <span class="fund-code">${fund.code}</span>
+          <span class="fund-name" id="name-${fund.code}"></span>
+        </div>
+        <div class="fund-actions">
+          <button class="btn-secondary" data-action="refresh" data-code="${fund.code}">刷新</button>
+          <button class="btn-danger" data-action="delete-fund" data-code="${fund.code}">移除</button>
+        </div>
+      </div>
+      <div class="nav-info" id="navinfo-${fund.code}">加载中…</div>
+
+      <div class="budget-row">
+        <label>总投入金额（元）</label>
+        <input type="number" class="total-budget-input" data-code="${fund.code}"
+               value="${fund.totalAmount ? fund.totalAmount : ''}" placeholder="如 20000" step="0.01" min="0">
+      </div>
+      <div class="budget-summary" id="budget-${fund.code}"></div>
+
+      <div class="buy-form">
+        <label>买入日期</label>
+        <input type="date" id="date-${fund.code}" value="${formatDateLocal(new Date())}">
+        <label>买入金额（元）</label>
+        <input type="number" id="amount-${fund.code}" placeholder="例如 5000" step="0.01" min="0">
+        <button class="btn-primary" data-action="add-buy" data-code="${fund.code}" disabled>添加买入记录</button>
+      </div>
+
+      <ul class="buy-list" id="list-${fund.code}"></ul>
+    `;
+    return card;
+  }
+
+  // ---------- 卡片更新 ----------
+  function updateFundCard(fund) {
+    const code = fund.code;
+    const card = fundsContainer.querySelector(`.fund-card[data-code="${code}"]`);
+    if (!card) return false;
+
+    const nameEl = document.getElementById(`name-${code}`);
+    const navEl = document.getElementById(`navinfo-${code}`);
+    const listEl = document.getElementById(`list-${code}`);
+    const budgetEl = document.getElementById(`budget-${code}`);
+    const addBtn = card.querySelector(`button[data-action="add-buy"]`);
+
+    if (nameEl) nameEl.textContent = fund.name ? `· ${fund.name}` : '';
+    if (navEl) {
+      navEl.textContent = fund.latestNav != null
+        ? `最新净值 ${fund.latestNav.toFixed(4)}（${fund.latestNavDate}）`
+        : '净值未加载';
+    }
+    if (addBtn) addBtn.disabled = fund.latestNav == null;
+
+    // 预算计算
+    const invested = fund.records.reduce((s, r) => s + r.amount, 0);
+    const total = fund.totalAmount || 0;
+    const remaining = total - invested;
+    if (budgetEl) {
+      budgetEl.innerHTML = `已投入 <b>¥${invested.toLocaleString()}</b> · 待投入 <b class="${remaining < 0 ? 'negative-text' : ''}">¥${remaining.toLocaleString()}</b>`;
+    }
+
+    const navMap = buildNavMap(fund.navHistory);
+
+    // 筛选逻辑
+    let displayRecords = fund.records;
+    if (isFiltered) {
+      displayRecords = fund.records.filter(r => {
+        const result = calcAnnualizedRate(fund, r, navMap);
+        return result && result.annualized >= SELL_THRESHOLD;
+      });
+      if (displayRecords.length === 0) {
+        card.style.display = 'none';
+        return false;
+      }
+    }
+    card.style.display = '';
+
+    if (displayRecords.length === 0) {
+      listEl.innerHTML = '<li class="empty">还没有买入记录</li>';
+      return true;
+    }
+
+    const sorted = [...displayRecords].sort((a, b) => a.buyDate.localeCompare(b.buyDate));
+
+    listEl.innerHTML = sorted.map(r => {
+      const result = calcAnnualizedRate(fund, r, navMap);
+      if (!result) {
+        return `<li class="buy-item">
+          <div class="buy-item-top">
+            <span class="date-amount">${r.buyDate} · ¥${r.amount.toLocaleString()}</span>
+          </div>
+          <div class="meta">净值数据缺失，无法计算</div>
+          <div class="buy-item-actions">
+            <button class="btn-danger" data-action="delete-buy" data-code="${code}" data-id="${r.id}">删除</button>
+          </div>
+        </li>`;
+      }
+      const ratePct = (result.annualized * 100).toFixed(2);
+      const cls = result.annualized >= 0 ? 'positive' : 'negative';
+      const sellable = result.annualized >= SELL_THRESHOLD;
+      return `<li class="buy-item">
+        <div class="buy-item-top">
+          <span class="date-amount">${r.buyDate} · ¥${r.amount.toLocaleString()}</span>
+          <span class="rate-wrap">
+            ${sellable ? '<span class="sell-tag">可卖出</span>' : ''}
+            <span class="rate ${cls}">${result.annualized >= 0 ? '+' : ''}${ratePct}%</span>
+          </span>
+        </div>
+        <div class="meta">买入净值 ${result.buyNav.toFixed(4)} · 份额 ${result.shares.toFixed(2)} · 持有 ${result.days} 天</div>
+        <div class="buy-item-actions">
+          <button class="btn-danger" data-action="delete-buy" data-code="${code}" data-id="${r.id}">删除</button>
+        </div>
+      </li>`;
+    }).join('');
+
+    return true;
+  }
+
+  function refreshAllCards() {
+    let visibleCount = 0;
+    funds.forEach(f => { if (updateFundCard(f)) visibleCount++; });
+    filterEmptyHint.style.display = (isFiltered && visibleCount === 0) ? 'block' : 'none';
+  }
+
+  // ---------- 加载净值 ----------
+  async function loadFundNav(code) {
+    const fund = funds.find(f => f.code === code);
+    if (!fund) return;
+
+    const navEl = document.getElementById(`navinfo-${code}`);
+    if (navEl) navEl.textContent = '正在获取净值…';
+
+    try {
+      const history = await FundApi.funds.auto.getNavHistory(code);
+      fund.navHistory = history || [];
+    } catch (e) {
+      console.error('历史净值获取失败', e);
+    }
+
+    try {
+      const info = await FundApi.funds.auto.getFund(code);
+      fund.name = info.name || info.fundName || fund.name || '';
+      const nav = Number(info.nav || info.dwjz || info.unitNav || info.latestNav);
+      const dateStr = info.date || info.navDate || info.jzrq;
+      if (!isNaN(nav)) {
+        fund.latestNav = nav;
+        fund.latestNavDate = dateStr ? normalizeDate(dateStr) : '';
+      }
+    } catch (e) {
+      console.error('最新净值获取失败', e);
+    }
+
+    if ((fund.latestNav == null || isNaN(fund.latestNav)) && fund.navHistory.length > 0) {
+      const last = fund.navHistory[fund.navHistory.length - 1];
+      const nav = Number(last.nav || last.dwjz || last.unitNav);
+      if (!isNaN(nav)) {
+        fund.latestNav = nav;
+        fund.latestNavDate = normalizeDate(last.date || last.navDate || last.jzrq || '');
+      }
+    }
+
+    if (navEl && (fund.latestNav == null || isNaN(fund.latestNav))) {
+      navEl.textContent = '未能获取最新净值，请点“刷新”重试';
+    }
+
+    updateFundCard(fund);
+  }
+
+  async function loadAllNavs() {
+    for (const f of funds) {
+      await loadFundNav(f.code);
+      await delay(150);
+    }
+  }
+
+  // ---------- 添加 / 删除 ----------
+  async function addFund(code) {
+    code = String(code || '').trim();
+    if (!/^\d{6}$/.test(code)) {
+      setGlobalStatus('请输入 6 位基金代码', true);
+      return;
+    }
+    if (funds.find(f => f.code === code)) {
+      setGlobalStatus('该基金已存在', true);
+      return;
+    }
+
+    const fund = {
+      code, name: '', totalAmount: 0, records: [],
+      navHistory: [], latestNav: null, latestNavDate: '',
+    };
+    funds.push(fund);
+    saveFunds();
+    fundsContainer.appendChild(createFundCard(fund));
+    updateFundCard(fund);
+
+    newFundCodeInput.value = '';
+    setGlobalStatus(`已添加 ${code}，正在加载净值…`);
+    await loadFundNav(code);
+    refreshAllCards();
+    setGlobalStatus(`已添加 ${code}`);
+  }
+
+  // ---------- 事件 ----------
+  addFundBtn.addEventListener('click', () => addFund(newFundCodeInput.value));
+  newFundCodeInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') addFundBtn.click();
+  });
+
+  toggleFilterBtn.addEventListener('click', () => {
+    isFiltered = !isFiltered;
+    toggleFilterBtn.classList.toggle('active', isFiltered);
+    toggleFilterBtn.textContent = isFiltered ? '显示全部买点' : '只看可卖出（≥6%）';
+    refreshAllCards();
+  });
+
+  // 总投入金额输入
+  fundsContainer.addEventListener('input', e => {
+    const input = e.target.closest('.total-budget-input');
+    if (!input) return;
+    const code = input.dataset.code;
+    const fund = funds.find(f => f.code === code);
+    if (!fund) return;
+    fund.totalAmount = parseFloat(input.value) || 0;
+    saveFunds();
+
+    const invested = fund.records.reduce((s, r) => s + r.amount, 0);
+    const remaining = fund.totalAmount - invested;
+    const budgetEl = document.getElementById(`budget-${code}`);
+    if (budgetEl) {
+      budgetEl.innerHTML = `已投入 <b>¥${invested.toLocaleString()}</b> · 待投入 <b class="${remaining < 0 ? 'negative-text' : ''}">¥${remaining.toLocaleString()}</b>`;
+    }
+  });
+
+  fundsContainer.addEventListener('click', async e => {
+    const btn = e.target.closest('button[data-action]');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const code = btn.dataset.code;
+    const fund = funds.find(f => f.code === code);
+    if (!fund) return;
+
+    if (action === 'refresh') {
+      await loadFundNav(code);
+      refreshAllCards();
+    } else if (action === 'delete-fund') {
+      if (!confirm(`确定移除基金 ${code} 及其全部买入记录？`)) return;
+      funds = funds.filter(f => f.code !== code);
+      saveFunds();
+      const card = btn.closest('.fund-card');
+      if (card) card.remove();
+      refreshAllCards();
+      setGlobalStatus(`已移除 ${code}`);
+    } else if (action === 'add-buy') {
+      if (fund.latestNav == null) {
+        alert('该基金净值尚未加载完成，请稍候或点“刷新”');
+        return;
+      }
+      const dateInput = document.getElementById(`date-${code}`);
+      const amountInput = document.getElementById(`amount-${code}`);
+      const date = dateInput.value;
+      const amount = parseFloat(amountInput.value);
+
+      if (!date) { alert('请选择买入日期'); return; }
+      if (!amount || amount <= 0) { alert('请输入有效金额'); return; }
+
+      const navMap = buildNavMap(fund.navHistory);
+      if (findNavOnOrBefore(navMap, date) == null) {
+        alert('该日期没有可用的净值数据，请确认日期是否在基金成立之后');
+        return;
+      }
+
+      fund.records.push({ id: uid(), buyDate: date, amount });
+      saveFunds();
+      amountInput.value = '';
+      refreshAllCards();
+    } else if (action === 'delete-buy') {
+      const id = btn.dataset.id;
+      if (!confirm('确定删除这笔买入记录？删除后不可恢复。')) return;
+      fund.records = fund.records.filter(r => r.id !== id);
+      saveFunds();
+      refreshAllCards();
+    }
+  });
+
+  // ---------- 启动 ----------
+  (function init() {
+    funds = loadFundsFromStorage();
+
+    if (funds.length === 0) {
+      setGlobalStatus('输入基金代码并点“添加”开始使用');
+      return;
+    }
+
+    funds.forEach(f => fundsContainer.appendChild(createFundCard(f)));
+    refreshAllCards();
+    setGlobalStatus(`已加载 ${funds.length} 只基金，正在刷新净值…`);
+    loadAllNavs().then(() => {
+      refreshAllCards();
+      setGlobalStatus(`已刷新 ${funds.length} 只基金净值`);
+    });
+  })();
+
+})();
+</script>
+</body>
+</html>
